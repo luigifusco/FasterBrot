@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mandelbrot</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            height: 100%;
+            width: 100%;
+        }
+    </style>
+<head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script src="js/gpu.js"></script>
+    <script>  
+    function drawMandelbrot() {
+        mandelbrot(rOffset, iOffset, rRange, iRange, w, h, nIter);
+        ctx.drawImage(mandelbrot.getCanvas(), 0, 0);
+    }
+
+    var nIter = 3000;
+    const gpu = new GPU();
+    const canvas = document.getElementById('canvas');
+    const h = canvas.height = window.innerHeight;
+    const w = canvas.width = window.innerWidth;
+    const ctx = canvas.getContext('2d');
+    var rOffset = 0,
+        iOffset = 0,
+        rRange,
+        iRange,
+        clicking;
+
+    if(w > h) {
+        rRange = 2.5*w/h;
+        iRange = 2.5;
+    } else {
+        rRange = 4;
+        iRange = 4*h/w;
+    }
+
+    const mandelbrot = gpu.createKernel(function(rOffset, iOffset, rRange, iRange, w, h, nIter) {
+        var r = 0,
+            i = 0,
+            rInitial = this.thread.x*rRange/w - rRange/2 + rOffset,
+            iInitial = this.thread.y*iRange/h - iRange/2 + iOffset,
+            oldr = 0,
+            oldi = 0,
+            n = 0,
+            mu;
+        
+        while(n < nIter && r*r + i*i < 4) {
+            oldr = r;
+            oldi = i;
+            r = oldr*oldr - oldi*oldi;
+            i = 2*oldr*oldi;
+            r += rInitial;
+            i += iInitial;
+            n++;
+        }
+        if(n < nIter) {
+            mu = n + 1 - Math.log(Math.log(Math.sqrt(r*r + i*i))) / Math.log(2);
+            this.color(
+                (-Math.cos(0.05*mu) + 1) / 2,
+                (-Math.cos(0.06*mu) + 1) / 2,
+                (-Math.cos(0.07*mu) + 1) / 2
+            );
+        } else {
+            this.color(0, 0, 0);
+        }
+    }).setOutput({x: w, y: h}).setGraphical(true);
+
+    
+    canvas.oncontextmenu = (e) => e.preventDefault();
+    
+    /*canvas.onclick = (e) => {
+        rOffset += (e.pageX/window.innerWidth) * rRange - rRange/2;
+        iOffset -= (e.pageY/window.innerHeight) * iRange - iRange/2;
+        rRange /= 2;
+        iRange /= 2;
+        drawMandelbrot();
+    }*/
+
+    canvas.onmousemove = (e) => {
+        if(e.buttons > 0) { 
+            rOffset -= e.movementX * rRange/w;
+            iOffset += e.movementY * iRange/h;
+            drawMandelbrot();
+        }
+    }
+
+    canvas.onwheel = (e) => {
+        rOffset += (e.pageX/window.innerWidth) * rRange - rRange/2;
+        iOffset -= (e.pageY/window.innerHeight) * iRange - iRange/2;
+        if(e.deltaY < 0) {
+            rRange /= 1.1;
+            iRange /= 1.1;
+        } else if(e.deltaY > 0) {
+            rRange *= 1.1;
+            iRange *= 1.1;
+        }
+        rOffset -= (e.pageX/window.innerWidth) * rRange - rRange/2;
+        iOffset += (e.pageY/window.innerHeight) * iRange - iRange/2;
+        drawMandelbrot();
+    }
+
+    window.onkeydown = (e) => {
+        if(e.key == 'r') {
+            if(rRange == 2.5*w/h && iRange == 2.5) {
+                rOffset = iOffset = 0;
+            } else {
+                rRange = 2.5*w/h;
+                iRange = 2.5;
+            }
+            drawMandelbrot();
+        }
+    }
+
+    drawMandelbrot();
+    </script>
+</body>
+</html>
